@@ -54,7 +54,7 @@ Reference real thinkers when relevant (never fabricate quotes): Drucker, Christe
 Avoid jargon, clichés, generic motivational tone. Short paragraphs, strong transitions.`;
 
 async function callClaude(sys, messages, maxTokens=1800) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/chat", {
     method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:maxTokens, system:sys, messages }),
   });
