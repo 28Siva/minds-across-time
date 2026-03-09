@@ -1,3 +1,9 @@
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -27,10 +33,8 @@ export default async function handler(req, res) {
 }
 ```
 
-Press **Ctrl+S** to save. Close Notepad.
-
-Then run:
+Save (**Ctrl+S**), close Notepad, then:
 ```
 git add .
-git commit -m "add api chat.js"
+git commit -m "fix api handler"
 git push
