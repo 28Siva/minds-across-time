@@ -13,17 +13,6 @@ const DEFAULT_LEADERS = [
   { id:"musk",       name:"Elon Musk",        era:"1971–present",  domain:"Entrepreneur",  avatar:"🚀",  style:"First principles thinking. Ignore conventional wisdom, move fast, think big",           custom:false, color:"#3F51B5" },
 ];
 
-const NAV = [
-  { id:"chat",     label:"Chat",          icon:"💬", group:"minds" },
-  { id:"insight",  label:"Insights",      icon:"💡", group:"minds" },
-  { id:"speech",   label:"Speech Studio", icon:"🎤", group:"create" },
-  { id:"meeting",  label:"Notes",         icon:"📋", group:"create" },
-  { id:"brain",    label:"Second Brain",  icon:"🧠", group:"brain" },
-  { id:"research", label:"Research",      icon:"🔬", group:"brain" },
-  { id:"synthesis",label:"Idea Synthesis",icon:"⚡", group:"brain" },
-  { id:"cluster",  label:"Knowledge Clusters", icon:"🗺️", group:"brain" },
-  { id:"saved",    label:"Saved",         icon:"🗂️", group:"system" },
-];
 
 const SPEECH_SUBMODES = [
   { id:"generate", label:"Speech Mode",       icon:"🎙️", desc:"Full structured speech from your brief" },
@@ -158,6 +147,12 @@ export default function App() {
   const [thoughtInput, setThoughtInput] = useState("");
   const [activeTag, setActiveTag] = useState(null);
 
+  // Journal state
+  const [journal, setJournal] = useState([]);
+  const [journalEntry, setJournalEntry] = useState({title:"",text:"",tag:""});
+  const [journalSearch, setJournalSearch] = useState("");
+  const [journalFilter, setJournalFilter] = useState("all");
+
   const chatEndRef = useRef(null);
 
   useEffect(()=>{
@@ -172,10 +167,12 @@ export default function App() {
         window.storage.get("mat-saved").catch(()=>null),
         window.storage.get("mat-leaders").catch(()=>null),
         window.storage.get("mat-notes").catch(()=>null),
+        window.storage.get("mat-journal").catch(()=>null),
       ]);
       if(items[0]) setSaved(JSON.parse(items[0].value));
       if(items[1]) setLeaders(JSON.parse(items[1].value));
       if(items[2]) setNotes(JSON.parse(items[2].value));
+      if(items[3]) setJournal(JSON.parse(items[3].value));
     } catch(e){}
   };
 
@@ -266,6 +263,22 @@ export default function App() {
 
   const deleteNote = (id) => { const u=notes.filter(n=>n.id!==id); setNotes(u); ps("mat-notes",u); };
 
+  // JOURNAL
+  const addJournalEntry = () => {
+    if(!journalEntry.text.trim()) return;
+    const entry = { id:Date.now(), title:journalEntry.title||journalEntry.text.slice(0,50), text:journalEntry.text, tag:journalEntry.tag||"general", ts:new Date().toLocaleString(), date:new Date().toLocaleDateString() };
+    const updated = [entry,...journal];
+    setJournal(updated); ps("mat-journal",updated);
+    setJournalEntry({title:"",text:"",tag:""});
+  };
+  const deleteJournalEntry = (id) => { const u=journal.filter(j=>j.id!==id); setJournal(u); ps("mat-journal",u); };
+  const journalTags = [...new Set(journal.map(j=>j.tag).filter(Boolean))];
+  const filteredJournal = journal.filter(j=>{
+    const matchSearch = !journalSearch || j.title.toLowerCase().includes(journalSearch.toLowerCase()) || j.text.toLowerCase().includes(journalSearch.toLowerCase());
+    const matchFilter = journalFilter==="all" || j.tag===journalFilter;
+    return matchSearch && matchFilter;
+  });
+
   // All unique tags
   const allTags = [...new Set(notes.flatMap(n=>n.tags||[]))];
 
@@ -321,7 +334,20 @@ export default function App() {
     { label:"Minds", ids:["chat","insight"] },
     { label:"Create", ids:["speech","meeting"] },
     { label:"Second Brain", ids:["brain","research","synthesis","cluster"] },
-    { label:"", ids:["saved"] },
+    { label:"", ids:["journal","saved"] },
+  ];
+
+  const NAV = [
+    { id:"chat",     label:"Chat",          icon:"💬" },
+    { id:"insight",  label:"Insights",      icon:"💡" },
+    { id:"speech",   label:"Speech Studio", icon:"🎤" },
+    { id:"meeting",  label:"Notes",         icon:"📋" },
+    { id:"brain",    label:"Second Brain",  icon:"🧠" },
+    { id:"research", label:"Research",      icon:"🔬" },
+    { id:"synthesis",label:"Idea Synthesis",icon:"⚡" },
+    { id:"cluster",  label:"Knowledge Clusters", icon:"🗺️" },
+    { id:"journal",  label:"My Journal",    icon:"📓" },
+    { id:"saved",    label:"Saved",         icon:"🗂️" },
   ];
 
   return (
@@ -362,7 +388,7 @@ export default function App() {
                     boxShadow:mode===m.id?"0 2px 8px rgba(0,0,0,0.15)":"none",
                     display:"flex",alignItems:"center",gap:5,
                   }}>
-                    <span>{m.icon}</span><span>{m.label}{m.id==="saved"&&saved.length>0?` (${saved.length})`:""}{m.id==="brain"&&notes.length>0?` (${notes.length})`:""}</span>
+                    <span>{m.icon}</span><span>{m.label}{m.id==="saved"&&saved.length>0?` (${saved.length})`:""}{m.id==="brain"&&notes.length>0?` (${notes.length})`:""}{m.id==="journal"&&journal.length>0?` (${journal.length})`:""}</span>
                   </button>
                 ))}
               </div>
@@ -597,6 +623,57 @@ export default function App() {
               )}
               {loading&&<Loader msg="Synthesising your knowledge cluster..."/>}
               {output&&!loading&&<OutputCard output={output} onCopy={()=>navigator.clipboard.writeText(output)} onSave={()=>saveItem({type:"cluster",label:`Cluster: ${activeTag}`,text:output})} label={`Knowledge Cluster · ${activeTag}`}/>}
+            </div>
+          )}
+
+          {/* ─ JOURNAL ─ */}
+          {mode==="journal" && (
+            <div>
+              <SectionTitle icon="📓" title="My Journal" sub="Save your own thoughts, ideas, reflections and inputs. Searchable and persistent."/>
+              <Card style={{display:"flex",flexDirection:"column",gap:12,marginBottom:18}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div><Label>Title (optional)</Label><input value={journalEntry.title} onChange={e=>setJournalEntry(p=>({...p,title:e.target.value}))} placeholder="e.g. Meeting with StartupTN" style={{...IS,resize:"none"}} onFocus={foc} onBlur={blu}/></div>
+                  <div><Label>Tag / Category</Label><input value={journalEntry.tag} onChange={e=>setJournalEntry(p=>({...p,tag:e.target.value}))} placeholder="e.g. idea, meeting, reflection" style={{...IS,resize:"none"}} onFocus={foc} onBlur={blu}/></div>
+                </div>
+                <div><Label>Your Thoughts / Input *</Label><textarea value={journalEntry.text} onChange={e=>setJournalEntry(p=>({...p,text:e.target.value}))} placeholder={"Write anything here — your ideas, meeting notes, observations, questions...\n\nThis is YOUR space. Everything you write is saved and searchable."} rows={6} style={IS} onFocus={foc} onBlur={blu}/></div>
+                <div style={{display:"flex",justifyContent:"flex-end",borderTop:"1px solid #f0f0f0",paddingTop:12}}>
+                  <button onClick={addJournalEntry} disabled={!journalEntry.text.trim()} style={{padding:"10px 24px",borderRadius:24,border:"none",cursor:"pointer",background:"linear-gradient(135deg, #9C27B0, #6A1B9A)",color:"white",fontFamily:"'DM Sans', sans-serif",fontWeight:600,fontSize:14,opacity:!journalEntry.text.trim()?0.5:1}}>📓 Save Entry</button>
+                </div>
+              </Card>
+
+              {/* Search + filter */}
+              {journal.length>0&&(
+                <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+                  <input value={journalSearch} onChange={e=>setJournalSearch(e.target.value)} placeholder="🔍 Search your journal..." style={{...IS,flex:1,minWidth:180,padding:"8px 14px"}} onFocus={foc} onBlur={blu}/>
+                  <Chip active={journalFilter==="all"} onClick={()=>setJournalFilter("all")} color="#9C27B0">All ({journal.length})</Chip>
+                  {journalTags.map(t=><Chip key={t} active={journalFilter===t} onClick={()=>setJournalFilter(journalFilter===t?"all":t)} color="#9C27B0">{t}</Chip>)}
+                </div>
+              )}
+
+              {filteredJournal.length===0&&journal.length===0&&<Card><p style={{margin:0,color:"#9ca3af",fontSize:14,textAlign:"center",padding:"20px 0"}}>Nothing written yet. Start capturing your thoughts above!</p></Card>}
+              {filteredJournal.length===0&&journal.length>0&&<Card><p style={{margin:0,color:"#9ca3af",fontSize:14,textAlign:"center",padding:"10px 0"}}>No entries match your search.</p></Card>}
+
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {filteredJournal.map(j=>(
+                  <div key={j.id} style={{background:"white",borderRadius:14,padding:"16px 18px",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:"4px solid #9C27B0"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,gap:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Playfair Display', serif",fontSize:15,fontWeight:700,color:"#1a1a2e",marginBottom:3}}>{j.title}</div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          {j.tag&&<span style={{fontSize:10,fontWeight:700,color:"#9C27B0",background:"#f3e5f5",padding:"2px 8px",borderRadius:8}}>{j.tag}</span>}
+                          <span style={{fontSize:10,color:"#d1d5db"}}>{j.ts}</span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:5,flexShrink:0}}>
+                        <button onClick={()=>navigator.clipboard.writeText(j.text)} style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",background:"#f5f5f5",border:"none",color:"#6b7280",fontSize:10}}>Copy</button>
+                        <button onClick={()=>saveItem({type:"journal",label:j.title,text:j.text})} style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",background:"#f3e5f5",border:"none",color:"#9C27B0",fontSize:10,fontWeight:600}}>Save ✦</button>
+                        <button onClick={()=>deleteJournalEntry(j.id)} style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",background:"#fff0f0",border:"none",color:"#e53935",fontSize:10}}>✕</button>
+                      </div>
+                    </div>
+                    <p style={{margin:0,fontSize:13.5,color:"#374151",lineHeight:1.75,whiteSpace:"pre-wrap"}}>{j.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
